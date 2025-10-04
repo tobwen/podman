@@ -100,7 +100,7 @@ func (ic *ContainerEngine) VolumeRm(ctx context.Context, namesOrIds []string, op
 			})
 			continue
 		}
-		
+
 		reports = append(reports, &entities.VolumeRmReport{
 			Err: ic.Libpod.RemoveVolume(ctx, vol, opts.Force, opts.Timeout),
 			Id:  vol.Name(),
@@ -284,12 +284,12 @@ func (ic *ContainerEngine) VolumeExport(_ context.Context, nameOrID string, opti
 	return nil
 }
 
-func (ic *ContainerEngine) VolumePin(ctx context.Context, namesOrIds []string, opts entities.VolumePinOptions) ([]*entities.VolumePinReport, error) {
-	var reports []*entities.VolumePinReport
+func (ic *ContainerEngine) VolumePin(_ context.Context, namesOrIds []string, opts entities.VolumePinOptions) ([]*entities.VolumePinReport, error) {
+	reports := make([]*entities.VolumePinReport, 0, len(namesOrIds))
 
 	for _, nameOrId := range namesOrIds {
 		report := &entities.VolumePinReport{Id: nameOrId}
-		
+
 		vol, err := ic.Libpod.LookupVolume(nameOrId)
 		if err != nil {
 			report.Err = err
