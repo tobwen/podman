@@ -2,8 +2,8 @@ package volumes
 
 import (
 	"bufio"
-	"context"
 	"fmt"
+	"net/url"
 	"os"
 	"strings"
 
@@ -44,6 +44,7 @@ func init() {
 	_ = pruneCommand.RegisterFlagCompletionFunc(filterFlagName, common.AutocompleteVolumePruneFilters)
 	flags.BoolP("force", "f", false, "Do not prompt for confirmation")
 	flags.BoolP("all", "a", false, "Remove all unused volumes, both anonymous and named")
+	flags.Bool("include-pinned", false, "Include pinned volumes in prune operation")
 }
 
 func prune(cmd *cobra.Command, _ []string) error {
@@ -52,6 +53,7 @@ func prune(cmd *cobra.Command, _ []string) error {
 		listOptions   = entities.VolumeListOptions{}
 		unusedOptions = entities.VolumeListOptions{}
 	)
+	ctx := registry.Context()
 	// Prompt for confirmation if --force is not set
 	force, err := cmd.Flags().GetBool("force")
 	if err != nil {
@@ -63,14 +65,23 @@ func prune(cmd *cobra.Command, _ []string) error {
 	}
 
 	// --all adds filter all=true (Docker-compatible; behavior is filter-only)
-	allFlag, _ := cmd.Flags().GetBool("all")
-	if allFlag {
+	allFlag, err := cmd.Flags().GetBool("all")
+	if err != nil {
+		return err
+	}
+	effectiveAll := allFlag || isTruthyFilter(pruneOptions.Filters, "all")
+	if effectiveAll {
 		pruneOptions.Filters.Set("all", "true")
 	}
 
+	includePinned, err := cmd.Flags().GetBool("include-pinned")
+	if err != nil {
+		return err
+	}
+	pruneOptions.IncludePinned = includePinned
 	if !force {
 		reader := bufio.NewReader(os.Stdin)
-		if allFlag {
+		if effectiveAll {
 			fmt.Println("WARNING! This will remove all volumes not used by at least one container. The following volumes will be removed:")
 		} else {
 			fmt.Println("WARNING! This will remove anonymous local volumes not used by at least one container. The following volumes will be removed:")
@@ -79,14 +90,27 @@ func prune(cmd *cobra.Command, _ []string) error {
 		if err != nil {
 			return err
 		}
-		filteredVolumes, err := registry.ContainerEngine().VolumeList(context.Background(), listOptions)
+
+		// Exclude pinned volumes from the confirmation preview unless
+		// --include-pinned was requested. The actual prune call also
+		// receives IncludePinned as the authoritative behavior flag.
+		if !includePinned {
+			if listOptions.Filter == nil {
+				listOptions.Filter = make(map[string][]string, 1)
+			}
+			if _, hasPinnedFilter := listOptions.Filter["pinned"]; !hasPinnedFilter {
+				listOptions.Filter["pinned"] = []string{"false"}
+			}
+		}
+
+		filteredVolumes, err := registry.ContainerEngine().VolumeList(ctx, listOptions)
 		if err != nil {
 			return err
 		}
 		var finalVolumes []*entities.VolumeListReport
-		if allFlag {
+		if effectiveAll {
 			unusedOptions.Filter = map[string][]string{"dangling": {"true"}}
-			unusedVolumes, err := registry.ContainerEngine().VolumeList(context.Background(), unusedOptions)
+			unusedVolumes, err := registry.ContainerEngine().VolumeList(ctx, unusedOptions)
 			if err != nil {
 				return err
 			}
@@ -94,18 +118,18 @@ func prune(cmd *cobra.Command, _ []string) error {
 		} else {
 			danglingOptions := entities.VolumeListOptions{Filter: map[string][]string{"dangling": {"true"}}}
 			anonymousOptions := entities.VolumeListOptions{Filter: map[string][]string{"anonymous": {"true"}}}
-			danglingVolumes, err := registry.ContainerEngine().VolumeList(context.Background(), danglingOptions)
+			danglingVolumes, err := registry.ContainerEngine().VolumeList(ctx, danglingOptions)
 			if err != nil {
 				return err
 			}
-			anonymousVolumes, err := registry.ContainerEngine().VolumeList(context.Background(), anonymousOptions)
+			anonymousVolumes, err := registry.ContainerEngine().VolumeList(ctx, anonymousOptions)
 			if err != nil {
 				return err
 			}
 			finalVolumes = getIntersection(getIntersection(danglingVolumes, anonymousVolumes), filteredVolumes)
 		}
 		if len(finalVolumes) < 1 {
-			if allFlag {
+			if effectiveAll {
 				fmt.Println("No dangling volumes found")
 			} else {
 				fmt.Println("No dangling anonymous volumes found")
@@ -124,11 +148,24 @@ func prune(cmd *cobra.Command, _ []string) error {
 			return nil
 		}
 	}
-	responses, err := registry.ContainerEngine().VolumePrune(context.Background(), pruneOptions)
+	responses, err := registry.ContainerEngine().VolumePrune(ctx, pruneOptions)
 	if err != nil {
 		return err
 	}
 	return utils.PrintVolumePruneResults(responses, false)
+}
+
+func isTruthyFilter(filters url.Values, key string) bool {
+	if filters == nil {
+		return false
+	}
+	for _, value := range filters[key] {
+		switch strings.ToLower(value) {
+		case "true", "1", "y", "yes":
+			return true
+		}
+	}
+	return false
 }
 
 func getIntersection(a, b []*entities.VolumeListReport) []*entities.VolumeListReport {

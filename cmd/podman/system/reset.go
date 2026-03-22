@@ -4,6 +4,7 @@ package system
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -11,6 +12,7 @@ import (
 	"github.com/containers/buildah/pkg/volumes"
 	"github.com/containers/podman/v6/cmd/podman/registry"
 	"github.com/containers/podman/v6/cmd/podman/validate"
+	"github.com/containers/podman/v6/libpod/define"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"go.podman.io/common/pkg/completion"
@@ -20,6 +22,7 @@ var (
 	systemResetDescription = `Reset podman storage back to default state
 
   All containers will be stopped and removed, and all images, volumes, networks and container content will be removed.
+  The reset is refused if pinned volumes exist; use --include-pinned to override, or unpin them first.
   This command does not restart podman.service and podman.socket systemd units. You may need to manually restart it after running this command.
 `
 	systemResetCommand = &cobra.Command{
@@ -32,7 +35,8 @@ var (
 		ValidArgsFunction: completion.AutocompleteNone,
 	}
 
-	forceFlag bool
+	forceFlag          bool
+	resetIncludePinned bool
 )
 
 func init() {
@@ -42,25 +46,33 @@ func init() {
 	})
 	flags := systemResetCommand.Flags()
 	flags.BoolVarP(&forceFlag, "force", "f", false, "Do not prompt for confirmation")
+	flags.BoolVar(&resetIncludePinned, "include-pinned", false, "Include pinned volumes in reset operation")
 }
 
 func reset(_ *cobra.Command, _ []string) {
+	hadError := false
 	// Get all the external containers in use
 	listCtn, err := registry.ContainerEngine().ContainerListExternal(registry.Context())
 	if err != nil {
 		logrus.Error(err)
+		hadError = true
 	}
 	// Prompt for confirmation if --force is not set
 	if !forceFlag {
 		reader := bufio.NewReader(os.Stdin)
-		fmt.Println(`WARNING! This will remove:
+		volumeWarning := "all volumes"
+		if !resetIncludePinned {
+			volumeWarning = "all unpinned volumes (pinned volumes prevent the reset)"
+		}
+		fmt.Printf(`WARNING! This will remove:
         - all containers
         - all pods
         - all images
         - all networks
         - all build cache
         - all machines
-        - all volumes`)
+        - %s
+`, volumeWarning)
 
 		info, _ := registry.ContainerEngine().Info(registry.Context())
 		// lets not hard fail in case of an error
@@ -90,17 +102,27 @@ func reset(_ *cobra.Command, _ []string) {
 	// Clean build cache if any
 	if err := volumes.CleanCacheMount(); err != nil {
 		logrus.Error(err)
+		hadError = true
 	}
 
 	// ContainerEngine() is unusable and shut down after this.
-	if err := registry.ContainerEngine().Reset(registry.Context(), false); err != nil {
+	if err := registry.ContainerEngine().Reset(registry.Context(), resetIncludePinned); err != nil {
+		if errors.Is(err, define.ErrVolumePinned) {
+			fmt.Fprintf(os.Stderr, "%v\n", err)
+			os.Exit(125)
+		}
 		logrus.Error(err)
+		hadError = true
 	}
 
 	// Shutdown podman-machine and delete all machine files
 	if err := resetMachine(); err != nil {
 		logrus.Error(err)
+		hadError = true
 	}
 
+	if hadError {
+		os.Exit(1)
+	}
 	os.Exit(0)
 }
