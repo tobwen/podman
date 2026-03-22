@@ -119,6 +119,25 @@ func Remove(ctx context.Context, nameOrID string, options *RemoveOptions) error 
 	return response.Process(nil)
 }
 
+// Pin sets or removes the pinned status on a volume.
+func Pin(ctx context.Context, nameOrID string, options *PinOptions) error {
+	conn, err := bindings.GetClient(ctx)
+	if err != nil {
+		return err
+	}
+	params, err := options.ToParams()
+	if err != nil {
+		return err
+	}
+	response, err := conn.DoRequest(ctx, nil, http.MethodPost, "/volumes/%s/pin", params, nil, nameOrID)
+	if err != nil {
+		return err
+	}
+	defer response.Body.Close()
+
+	return response.Process(nil)
+}
+
 // Exists returns true if a given volume exists
 func Exists(ctx context.Context, nameOrID string, _ *ExistsOptions) (bool, error) {
 	conn, err := bindings.GetClient(ctx)

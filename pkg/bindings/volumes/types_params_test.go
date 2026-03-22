@@ -13,6 +13,17 @@ func TestPruneOptionsSerializeIncludePinned(t *testing.T) {
 	}
 }
 
+func TestPinOptionsSerializeUnpin(t *testing.T) {
+	params, err := new(PinOptions).WithUnpin(true).ToParams()
+	if err != nil {
+		t.Fatalf("serializing pin options: %v", err)
+	}
+
+	if got := params.Get("unpin"); got != "true" {
+		t.Fatalf("expected unpin=true, got %q", got)
+	}
+}
+
 func TestRemoveOptionsSerializeIncludePinned(t *testing.T) {
 	params, err := new(RemoveOptions).WithIncludePinned(true).ToParams()
 	if err != nil {

@@ -44,3 +44,11 @@ type RemoveOptions struct {
 //
 //go:generate go run ../generator/generator.go ExistsOptions
 type ExistsOptions struct{}
+
+// PinOptions are optional options for pinning volumes
+//
+//go:generate go run ../generator/generator.go PinOptions
+type PinOptions struct {
+	// Unpin unsets the pinned status on the volume
+	Unpin *bool `schema:"unpin"`
+}

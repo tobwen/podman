@@ -35,8 +35,14 @@ func (ic *ContainerEngine) VolumeRm(_ context.Context, namesOrIds []string, opts
 		if opts.Timeout != nil {
 			options = options.WithTimeout(*opts.Timeout)
 		}
+		err := volumes.Remove(ic.ClientCtx, id, options)
+		if err != nil && opts.Ignore {
+			if errModel, ok := err.(*errorhandling.ErrorModel); ok && errModel.ResponseCode == 404 {
+				err = nil
+			}
+		}
 		reports = append(reports, &entities.VolumeRmReport{
-			Err: volumes.Remove(ic.ClientCtx, id, options),
+			Err: err,
 			Id:  id,
 		})
 	}
@@ -122,14 +128,17 @@ func (ic *ContainerEngine) VolumeImport(_ context.Context, nameOrID string, opti
 	return volumes.Import(ic.ClientCtx, nameOrID, options.Input)
 }
 
-func (ic *ContainerEngine) VolumePin(_ context.Context, namesOrIds []string, _ entities.VolumePinOptions) ([]*entities.VolumePinReport, error) {
+func (ic *ContainerEngine) VolumePin(_ context.Context, namesOrIds []string, opts entities.VolumePinOptions) ([]*entities.VolumePinReport, error) {
 	reports := make([]*entities.VolumePinReport, 0, len(namesOrIds))
 	for _, nameOrId := range namesOrIds {
-		report := &entities.VolumePinReport{
-			ID:  nameOrId,
-			Err: errors.New("volume pinning is not supported for remote clients"),
+		options := new(volumes.PinOptions)
+		if opts.Unpin {
+			options = options.WithUnpin(true)
 		}
-		reports = append(reports, report)
+		reports = append(reports, &entities.VolumePinReport{
+			ID:  nameOrId,
+			Err: volumes.Pin(ic.ClientCtx, nameOrId, options),
+		})
 	}
 	return reports, nil
 }
