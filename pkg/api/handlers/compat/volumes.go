@@ -48,6 +48,7 @@ func ListVolumes(w http.ResponseWriter, r *http.Request) {
 		filterFunc, err := filters.GenerateVolumeFilters(filter, filterValues, runtime)
 		if err != nil {
 			utils.InternalServerError(w, err)
+			return
 		}
 		volumeFilters = append(volumeFilters, filterFunc)
 	}
@@ -230,8 +231,9 @@ func RemoveVolume(w http.ResponseWriter, r *http.Request) {
 		decoder = utils.GetDecoder(r)
 	)
 	query := struct {
-		Force   bool  `schema:"force"`
-		Timeout *uint `schema:"timeout"`
+		Force         bool  `schema:"force"`
+		Timeout       *uint `schema:"timeout"`
+		IncludePinned bool  `schema:"includePinned"`
 	}{
 		// override any golang type defaults
 	}
@@ -257,8 +259,8 @@ func RemoveVolume(w http.ResponseWriter, r *http.Request) {
 	vol, err := runtime.LookupVolume(name)
 	if err == nil {
 		// As above, we do not pass `force` from the query parameters here
-		if err := runtime.RemoveVolume(r.Context(), vol, false, query.Timeout, false); err != nil {
-			if errors.Is(err, define.ErrVolumeBeingUsed) {
+		if err := runtime.RemoveVolume(r.Context(), vol, false, query.Timeout, query.IncludePinned); err != nil {
+			if errors.Is(err, define.ErrVolumeBeingUsed) || errors.Is(err, define.ErrVolumePinned) {
 				utils.Error(w, http.StatusConflict, err)
 			} else {
 				utils.InternalServerError(w, err)
@@ -281,6 +283,7 @@ func RemoveVolume(w http.ResponseWriter, r *http.Request) {
 
 func PruneVolumes(w http.ResponseWriter, r *http.Request) {
 	runtime := r.Context().Value(api.RuntimeKey).(*libpod.Runtime)
+	decoder := utils.GetDecoder(r)
 	filterMap, err := util.PrepareFilters(r)
 	if err != nil {
 		utils.Error(w, http.StatusInternalServerError, fmt.Errorf("Decode(): %w", err))
@@ -298,7 +301,15 @@ func PruneVolumes(w http.ResponseWriter, r *http.Request) {
 		filterFuncs = append(filterFuncs, filterFunc)
 	}
 
-	pruned, err := runtime.PruneVolumes(r.Context(), filterFuncs, false)
+	query := struct {
+		IncludePinned bool `schema:"includePinned"`
+	}{}
+	if err := decoder.Decode(&query, r.URL.Query()); err != nil {
+		utils.Error(w, http.StatusInternalServerError, fmt.Errorf("failed to parse parameters for %s: %w", r.URL.String(), err))
+		return
+	}
+
+	pruned, err := runtime.PruneVolumes(r.Context(), filterFuncs, query.IncludePinned)
 	if err != nil {
 		utils.InternalServerError(w, err)
 		return
