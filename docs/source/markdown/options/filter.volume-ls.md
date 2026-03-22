@@ -20,6 +20,7 @@ Volumes can be filtered by the following attributes:
 | label!      | [Key] or [Key=Value] Volumes without the specified label                              |
 | name        | [Name] Volume name (accepts regex)                                                    |
 | opt         | Matches a storage driver options                                                      |
+| pinned      | [Bool] Matches volumes based on their pinned status (true/false)                      |
 | scope       | Filters volume by scope                                                               |
 | after/since | Filter by volumes created after the given VOLUME (name or tag)                        |
 | until       | Filter by volumes created before given timestamp                                      |

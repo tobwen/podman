@@ -15,6 +15,9 @@ Use **--all** (or **-a**) to remove all unused volumes, including named ones.
 The **--filter** flag can be used to restrict which volumes are considered. Users are prompted to confirm
 removal unless **--force** is used.
 
+By default, pinned volumes are excluded from pruning to protect important data. Use **--include-pinned**
+to include pinned volumes in the prune operation.
+
 ## OPTIONS
 
 #### **--all**, **-a**
@@ -35,6 +38,7 @@ Supported filters:
 | anonymous   | [Bool] Only remove volumes that are anonymous (true) or named (false).                                     |
 | label       | [String] Only remove volumes, with (or without, in the case of label!=[...] is used) the specified labels. |
 | label!      | [String] Only remove volumes without the specified labels.                                                 |
+| pinned      | [Bool] Only remove volumes based on their pinned status (true/false)                                       |
 | until       | [DateTime] Only remove volumes created before given timestamp.                                             |
 | after/since | [Volume] Filter by volumes created after the given VOLUME (name or tag)                                    |
 
@@ -50,6 +54,9 @@ Do not prompt for confirmation.
 
 Print usage statement
 
+#### **--include-pinned**
+
+Include pinned volumes in the prune operation. By default, pinned volumes are excluded from pruning to protect important data.
 
 ## EXAMPLES
 
@@ -94,7 +101,7 @@ $ podman volume prune --filter label!=environment
 ```
 
 ## SEE ALSO
-**[podman(1)](podman.1.md)**, **[podman-volume(1)](podman-volume.1.md)**
+**[podman(1)](podman.1.md)**, **[podman-volume(1)](podman-volume.1.md)**, **[podman-volume-pin(1)](podman-volume-pin.1.md)**
 
 ## HISTORY
 November 2018, Originally compiled by Urvashi Mohnani <umohnani@redhat.com>
