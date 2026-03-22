@@ -86,7 +86,7 @@ func (ic *ContainerEngine) VolumeRm(ctx context.Context, namesOrIds []string, op
 	}
 	for _, vol := range vols {
 		reports = append(reports, &entities.VolumeRmReport{
-			Err: ic.Libpod.RemoveVolume(ctx, vol, opts.Force, opts.Timeout),
+			Err: ic.Libpod.RemoveVolume(ctx, vol, opts.Force, opts.Timeout, false),
 			Id:  vol.Name(),
 		})
 	}
@@ -144,11 +144,11 @@ func (ic *ContainerEngine) VolumePrune(ctx context.Context, options entities.Vol
 		}
 		funcs = append(funcs, filterFunc)
 	}
-	return ic.pruneVolumesHelper(ctx, funcs)
+	return ic.pruneVolumesHelper(ctx, funcs, false)
 }
 
-func (ic *ContainerEngine) pruneVolumesHelper(ctx context.Context, filterFuncs []libpod.VolumeFilter) ([]*reports.PruneReport, error) {
-	pruned, err := ic.Libpod.PruneVolumes(ctx, filterFuncs)
+func (ic *ContainerEngine) pruneVolumesHelper(ctx context.Context, filterFuncs []libpod.VolumeFilter, _ bool) ([]*reports.PruneReport, error) {
+	pruned, err := ic.Libpod.PruneVolumes(ctx, filterFuncs, false)
 	if err != nil {
 		return nil, err
 	}

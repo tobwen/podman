@@ -1744,6 +1744,19 @@ func WithVolumeAnonymous() VolumeCreateOption {
 	}
 }
 
+// WithVolumePinned marks a volume as pinned at creation time.
+func WithVolumePinned() VolumeCreateOption {
+	return func(volume *Volume) error {
+		if volume.valid {
+			return define.ErrVolumeFinalized
+		}
+
+		volume.state.Pinned = true
+
+		return nil
+	}
+}
+
 // WithVolumeDriverTimeout sets the volume creation timeout period.
 // Only usable if a non-local volume driver is in use.
 func WithVolumeDriverTimeout(timeout uint) VolumeCreateOption {

@@ -162,7 +162,7 @@ func pruneVolumesHelper(r *http.Request) ([]*reports.PruneReport, error) {
 		filterFuncs = append(filterFuncs, filterFunc)
 	}
 
-	reports, err := runtime.PruneVolumes(r.Context(), filterFuncs)
+	reports, err := runtime.PruneVolumes(r.Context(), filterFuncs, false)
 	if err != nil {
 		return nil, err
 	}
@@ -192,7 +192,7 @@ func RemoveVolume(w http.ResponseWriter, r *http.Request) {
 		utils.VolumeNotFound(w, name, err)
 		return
 	}
-	if err := runtime.RemoveVolume(r.Context(), vol, query.Force, query.Timeout); err != nil {
+	if err := runtime.RemoveVolume(r.Context(), vol, query.Force, query.Timeout, false); err != nil {
 		if errors.Is(err, define.ErrVolumeBeingUsed) {
 			utils.Error(w, http.StatusConflict, err)
 			return

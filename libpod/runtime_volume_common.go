@@ -293,7 +293,7 @@ func (r *Runtime) UpdateVolumePlugins(ctx context.Context) *define.VolumeReload 
 		if vol.UsesVolumeDriver() {
 			if _, ok := allPluginVolumes[vol.Name()]; !ok {
 				// The volume is no longer in the plugin. Let's remove it from the libpod db.
-				if err := r.removeVolume(ctx, vol, false, nil, true); err != nil {
+				if err := r.removeVolume(ctx, vol, false, nil, true, true); err != nil {
 					if errors.Is(err, define.ErrVolumeBeingUsed) {
 						// Volume is still used by at least one container. This is very bad,
 						// the plugin no longer has this but we still need it.
@@ -358,7 +358,7 @@ func makeVolumeInPluginIfNotExist(name string, options map[string]string, plugin
 // removeVolume removes the specified volume from state as well tears down its mountpoint and storage.
 // ignoreVolumePlugin is used to only remove the volume from the db and not the plugin,
 // this is required when the volume was already removed from the plugin, i.e. in UpdateVolumePlugins().
-func (r *Runtime) removeVolume(ctx context.Context, v *Volume, force bool, timeout *uint, ignoreVolumePlugin bool) error {
+func (r *Runtime) removeVolume(ctx context.Context, v *Volume, force bool, timeout *uint, ignoreVolumePlugin bool, includePinned bool) error {
 	if !v.valid {
 		if ok, _ := r.state.HasVolume(v.Name()); !ok {
 			return nil
@@ -366,11 +366,17 @@ func (r *Runtime) removeVolume(ctx context.Context, v *Volume, force bool, timeo
 		return define.ErrVolumeRemoved
 	}
 
+	// Note: The pinned check runs after the container dependency cleanup and
+	// volume lock acquisition (below) to avoid an ABBA deadlock. Lock ordering
+	// requires container locks before volume locks. A narrow pin/unpin race
+	// window exists between the dependency check and the pinned check, but this
+	// is acceptable because pin/unpin operations are rare during removal.
+
 	// DANGEROUS: Do not lock here yet because we might needed to remove containers first.
 	// In general we must always acquire the ctr lock before a volume lock so we cannot lock.
 	// THIS MUST BE DONE to prevent ABBA deadlocks.
 	// It also means the are several races around creating containers with volumes and removing
-	// them in parallel. However that problem exists regadless of taking the lock here or not.
+	// them in parallel. However that problem exists regardless of taking the lock here or not.
 
 	deps, err := r.state.VolumeInUse(v)
 	if err != nil {
@@ -414,6 +420,11 @@ func (r *Runtime) removeVolume(ctx context.Context, v *Volume, force bool, timeo
 	// Update volume status to pick up a potential removal from state
 	if err := v.update(); err != nil {
 		return err
+	}
+
+	// Check pinned status after acquiring the volume lock.
+	if !includePinned && v.state.Pinned {
+		return fmt.Errorf("volume %s is pinned and cannot be removed without --include-pinned flag: %w", v.Name(), define.ErrVolumePinned)
 	}
 
 	// If the volume is still mounted - force unmount it

@@ -1424,7 +1424,7 @@ func (ic *ContainerEngine) playKubePVC(ctx context.Context, mountLabel string, p
 		err = ic.importVolume(ctx, vol, tarFile)
 		if err != nil {
 			// Remove the volume to avoid partial success
-			if rmErr := ic.Libpod.RemoveVolume(ctx, vol, true, nil); rmErr != nil {
+			if rmErr := ic.Libpod.RemoveVolume(ctx, vol, true, nil, false); rmErr != nil {
 				logrus.Debug(rmErr)
 			}
 			return nil, err

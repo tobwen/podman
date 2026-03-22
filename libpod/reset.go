@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/containers/podman/v6/libpod/define"
 	"github.com/containers/podman/v6/pkg/errorhandling"
@@ -92,7 +93,7 @@ func (r *Runtime) removeAllDirs() error {
 // Reset removes all Libpod files.
 // All containers, images, volumes, pods, and networks will be removed.
 // Calls Shutdown(), rendering the runtime unusable after this is run.
-func (r *Runtime) Reset(ctx context.Context) error {
+func (r *Runtime) Reset(ctx context.Context, includePinned bool) error {
 	// Acquire the alive lock and hold it.
 	// Ensures that we don't let other Podman commands run while we are
 	// removing everything.
@@ -105,6 +106,27 @@ func (r *Runtime) Reset(ctx context.Context) error {
 
 	if !r.valid {
 		return define.ErrRuntimeStopped
+	}
+
+	if !includePinned {
+		volumes, err := r.state.AllVolumes()
+		if err != nil {
+			return err
+		}
+		var pinnedVolumes []string
+		for _, v := range volumes {
+			isPinned, err := v.IsPinnedWithError()
+			if err != nil {
+				return fmt.Errorf("checking pinned status for volume %s: %w", v.Name(), err)
+			}
+			if isPinned {
+				pinnedVolumes = append(pinnedVolumes, v.Name())
+			}
+		}
+		if len(pinnedVolumes) > 0 {
+			return fmt.Errorf("%w: %d pinned volume(s) prevent reset (%s); use --include-pinned to override, or unpin them first",
+				define.ErrVolumePinned, len(pinnedVolumes), strings.Join(pinnedVolumes, ", "))
+		}
 	}
 
 	var timeout uint = 0
@@ -162,7 +184,7 @@ func (r *Runtime) Reset(ctx context.Context) error {
 		return err
 	}
 	for _, v := range volumes {
-		if err := r.RemoveVolume(ctx, v, true, &timeout); err != nil {
+		if err := r.RemoveVolume(ctx, v, true, &timeout, true); err != nil {
 			if errors.Is(err, define.ErrNoSuchVolume) {
 				continue
 			}

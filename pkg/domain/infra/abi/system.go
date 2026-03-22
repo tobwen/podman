@@ -301,7 +301,7 @@ func (ic *ContainerEngine) SystemDf(ctx context.Context, _ entities.SystemDfOpti
 }
 
 func (ic *ContainerEngine) Reset(ctx context.Context) error {
-	return ic.Libpod.Reset(ctx)
+	return ic.Libpod.Reset(ctx, false)
 }
 
 func (ic *ContainerEngine) Renumber(_ context.Context) error {

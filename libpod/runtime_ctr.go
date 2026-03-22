@@ -1039,7 +1039,7 @@ func (r *Runtime) removeContainer(ctx context.Context, c *Container, opts ctrRmO
 			if !volume.Anonymous() {
 				continue
 			}
-			if err := runtime.removeVolume(ctx, volume, false, opts.Timeout, false); err != nil && !errors.Is(err, define.ErrNoSuchVolume) {
+			if err := runtime.removeVolume(ctx, volume, false, opts.Timeout, false, false); err != nil && !errors.Is(err, define.ErrNoSuchVolume) {
 				if errors.Is(err, define.ErrVolumeBeingUsed) {
 					// Ignore error, since podman will report original error
 					volumesFrom, _ := c.volumesFrom()
@@ -1047,6 +1047,10 @@ func (r *Runtime) removeContainer(ctx context.Context, c *Container, opts ctrRmO
 						logrus.Debugf("Cleaning up volume not possible since volume is in use (%s)", v.Name)
 						continue
 					}
+				}
+				if errors.Is(err, define.ErrVolumePinned) {
+					logrus.Debugf("Not cleaning up pinned anonymous volume %s", v.Name)
+					continue
 				}
 				logrus.Errorf("Cleaning up volume (%s): %v", v.Name, err)
 			}
@@ -1195,7 +1199,7 @@ func (r *Runtime) evictContainer(ctx context.Context, idOrName string, removeVol
 			if !volume.Anonymous() {
 				continue
 			}
-			if err := r.removeVolume(ctx, volume, false, timeout, false); err != nil && err != define.ErrNoSuchVolume && err != define.ErrVolumeBeingUsed {
+			if err := r.removeVolume(ctx, volume, false, timeout, false, false); err != nil && err != define.ErrNoSuchVolume && err != define.ErrVolumeBeingUsed && !errors.Is(err, define.ErrVolumePinned) {
 				logrus.Errorf("Cleaning up volume (%s): %v", v.Name, err)
 			}
 		}
