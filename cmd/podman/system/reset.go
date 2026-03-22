@@ -93,7 +93,7 @@ func reset(_ *cobra.Command, _ []string) {
 	}
 
 	// ContainerEngine() is unusable and shut down after this.
-	if err := registry.ContainerEngine().Reset(registry.Context()); err != nil {
+	if err := registry.ContainerEngine().Reset(registry.Context(), false); err != nil {
 		logrus.Error(err)
 	}
 

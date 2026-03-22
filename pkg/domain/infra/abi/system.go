@@ -160,6 +160,7 @@ func (ic *ContainerEngine) SystemPrune(ctx context.Context, options entities.Sys
 		if options.Volume {
 			volumePruneOptions := entities.VolumePruneOptions{}
 			volumePruneOptions.Filters = (url.Values)(options.Filters)
+			volumePruneOptions.IncludePinned = options.VolumePruneOptions.IncludePinned
 
 			if len(volumePruneOptions.Filters) == 0 {
 				volumePruneOptions.Filters.Set("all", "true")
@@ -300,8 +301,8 @@ func (ic *ContainerEngine) SystemDf(ctx context.Context, _ entities.SystemDfOpti
 	}, nil
 }
 
-func (ic *ContainerEngine) Reset(ctx context.Context) error {
-	return ic.Libpod.Reset(ctx, false)
+func (ic *ContainerEngine) Reset(ctx context.Context, includePinned bool) error {
+	return ic.Libpod.Reset(ctx, includePinned)
 }
 
 func (ic *ContainerEngine) Renumber(_ context.Context) error {

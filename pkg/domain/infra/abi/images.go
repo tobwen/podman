@@ -657,6 +657,37 @@ func (ir *ImageEngine) Remove(ctx context.Context, images []string, opts entitie
 		report.ExitCode = removeErrorsToExitCode(rmErrors)
 	}()
 
+	// Check if any of the images to remove are used by pinned image-backed volumes.
+	// This check must happen before calling RemoveImages because the storage layer
+	// will throw an error for "image in use by a container" before our
+	// RemoveContainersForImageCallback is invoked.
+	vols, err := ir.Libpod.GetAllVolumes()
+	if err != nil {
+		return report, []error{err}
+	}
+	var pinnedErrors []error
+	for _, imageRef := range images {
+		img, _, err := ir.Libpod.LibimageRuntime().LookupImage(imageRef, nil)
+		if err != nil || img == nil {
+			continue
+		}
+
+		for _, vol := range vols {
+			volConfig, err := vol.Config()
+			if err != nil {
+				continue
+			}
+			if vol.Driver() == define.VolumeDriverImage && vol.IsPinned() && volConfig.StorageImageID == img.ID() {
+				pinnedErrors = append(pinnedErrors, fmt.Errorf("removing image %s: volume %s is pinned; unpin it first with 'podman volume pin --unpin %s': %w", imageRef, vol.Name(), vol.Name(), define.ErrVolumePinned))
+			}
+		}
+	}
+
+	// If we found any pinned volumes, don't attempt removal
+	if len(pinnedErrors) > 0 {
+		return report, pinnedErrors
+	}
+
 	libimageOptions := &libimage.RemoveImagesOptions{}
 	libimageOptions.Filters = []string{"readonly=false"}
 	libimageOptions.Force = opts.Force

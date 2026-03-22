@@ -13,10 +13,11 @@ type VolumeCreateOptions = types.VolumeCreateOptions
 type VolumeConfigResponse = types.VolumeConfigResponse
 
 type VolumeRmOptions struct {
-	All     bool
-	Force   bool
-	Ignore  bool
-	Timeout *uint
+	All           bool
+	Force         bool
+	Ignore        bool
+	Timeout       *uint
+	IncludePinned bool
 }
 
 type VolumeRmReport = types.VolumeRmReport
@@ -28,7 +29,8 @@ type VolumeInspectReport = types.VolumeInspectReport
 // - when filter "all" is not set or not truthy, only anonymous unused volumes are pruned (default);
 // - when filter "all" is true, all unused volumes are pruned.
 type VolumePruneOptions struct {
-	Filters url.Values `json:"filters" schema:"filters"`
+	Filters       url.Values `json:"filters" schema:"filters"`
+	IncludePinned bool       `json:"includePinned" schema:"includePinned"`
 }
 
 type VolumeListOptions struct {
@@ -55,4 +57,15 @@ type VolumeExportOptions struct {
 type VolumeImportOptions struct {
 	// Input will be closed upon being fully consumed
 	Input io.Reader
+}
+
+// VolumePinOptions describes the options for pinning/unpinning volumes
+type VolumePinOptions struct {
+	Unpin bool
+}
+
+// VolumePinReport describes the response from pinning/unpinning a volume
+type VolumePinReport struct {
+	ID  string
+	Err error
 }
