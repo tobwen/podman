@@ -109,4 +109,33 @@ var _ = Describe("podman system reset", Serial, func() {
 		session2.WaitWithDefaultTimeout()
 		Expect(session2).Should(ExitCleanly())
 	})
+
+	It("podman system reset refuses when pinned volumes exist", func() {
+		SkipIfRemote("system reset not supported on podman --remote")
+		useCustomNetworkDir(podmanTest, tempdir)
+
+		pinnedVolName := "pinned-reset-vol"
+
+		session := podmanTest.Podman([]string{"volume", "create", "--pinned", pinnedVolName})
+		session.WaitWithDefaultTimeout()
+		Expect(session).Should(ExitCleanly())
+
+		session = podmanTest.Podman([]string{"system", "reset", "-f"})
+		session.WaitWithDefaultTimeout()
+		Expect(session).To(ExitWithError(125, "pinned"))
+
+		session = podmanTest.Podman([]string{"volume", "ls", "-q"})
+		session.WaitWithDefaultTimeout()
+		Expect(session).Should(ExitCleanly())
+		Expect(session.OutputToStringArray()).To(ContainElement(pinnedVolName))
+
+		session = podmanTest.Podman([]string{"system", "reset", "-f", "--include-pinned"})
+		session.WaitWithDefaultTimeout()
+		Expect(session).Should(ExitCleanly())
+
+		session = podmanTest.Podman([]string{"volume", "ls", "-q"})
+		session.WaitWithDefaultTimeout()
+		Expect(session).Should(ExitCleanly())
+		Expect(session.OutputToStringArray()).To(Not(ContainElement(pinnedVolName)))
+	})
 })

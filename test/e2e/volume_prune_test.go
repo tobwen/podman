@@ -127,4 +127,22 @@ var _ = Describe("Podman volume prune", func() {
 		Expect(session.OutputToStringArray()).To(HaveLen(1))
 		Expect(session.OutputToStringArray()[0]).To(Equal(vol1))
 	})
+
+	It("podman volume prune excludes pinned volumes by default", func() {
+		pinnedVolName := "pinned-prune-vol"
+		unpinnedVolName := "unpinned-prune-vol"
+
+		podmanTest.PodmanExitCleanly("volume", "create", "--pinned", pinnedVolName)
+		podmanTest.PodmanExitCleanly("volume", "create", unpinnedVolName)
+		podmanTest.PodmanExitCleanly("volume", "prune", "--force")
+
+		session := podmanTest.PodmanExitCleanly("volume", "ls", "-q")
+		Expect(session.OutputToStringArray()).To(ContainElement(pinnedVolName))
+		Expect(session.OutputToStringArray()).To(Not(ContainElement(unpinnedVolName)))
+
+		podmanTest.PodmanExitCleanly("volume", "prune", "--force", "--include-pinned")
+
+		session = podmanTest.PodmanExitCleanly("volume", "ls", "-q")
+		Expect(session.OutputToStringArray()).To(Not(ContainElement(pinnedVolName)))
+	})
 })
